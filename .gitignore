@@ -4,7 +4,14 @@ __pycache__/
 .venv/
 ckpts/*
 !ckpts/.gitkeep
+!.env.example
+.env
+.uv-cache/
+.uv-python/
+runtime/
 outputs/
+dist/
+*.log
 tests/
 operators/Block-Sparse-Attention
 *.egg-info

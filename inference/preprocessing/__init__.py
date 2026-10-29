@@ -1,4 +1,11 @@
-from .input import load_lq_video, iter_lq_video, get_lq_video_fps, pil_center_crop_resize
+from .input import (
+    aligned_spatial_size,
+    get_lq_video_fps,
+    iter_lq_video,
+    load_lq_video,
+    pil_center_crop_resize,
+    spatial_padding,
+)
 from .stream import TemporalVideoStream
 from .padding import (
     pad_video_frames,
@@ -20,6 +27,8 @@ __all__ = [
     "TemporalVideoStream",
     "pad_video_frames",
     "pil_center_crop_resize",
+    "aligned_spatial_size",
+    "spatial_padding",
     "repeat_last_frame",
     "target_frame_count",
     "TemporalExpansion",

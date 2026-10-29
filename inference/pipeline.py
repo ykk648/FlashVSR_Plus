@@ -13,6 +13,7 @@ from inference.output import (
     save_tensor_video,
 )
 from inference.preprocessing import (
+    aligned_spatial_size,
     expand_for_temporal_compression,
     load_lq_video,
     iter_lq_video,
@@ -52,6 +53,11 @@ class FlashVSRInferencePipeline:
     ) -> InferenceResult:
         request = request or InferenceRequest(**kwargs)
         request.validate()
+        model_size = (
+            aligned_spatial_size(request.height, request.width)
+            if request.height is not None and request.width is not None
+            else None
+        )
         set_inference_seed(self.config.seed)
         input_stream = None
         expansion = None
@@ -104,7 +110,10 @@ class FlashVSRInferencePipeline:
         writer = None
         if incremental:
             writer = IncrementalVideoWriter(
-                encoded_path, fps, preset=video_preset
+                encoded_path,
+                fps,
+                preset=video_preset,
+                output_size=(request.height, request.width) if request.height is not None else None,
             )
         try:
             output = self.runner.run(
@@ -141,9 +150,17 @@ class FlashVSRInferencePipeline:
             # The model input may contain repeated tail frames used only to
             # satisfy its temporal grid. Never expose those synthetic frames.
             video = video[:, :, : timeline.source_frames]
+            if request.height is not None and request.width is not None:
+                top = (video.shape[-2] - request.height) // 2
+                left = (video.shape[-1] - request.width) // 2
+                video = video[..., top:top + request.height, left:left + request.width]
         color_config = self.config.color_correction
         if video is not None and self.color_corrector is not None and self.config.decoder.decode_every == "auto":
             reference = lq_video[:, :, : video.shape[2]]
+            if request.height is not None and request.width is not None:
+                top = (reference.shape[-2] - request.height) // 2
+                left = (reference.shape[-1] - request.width) // 2
+                reference = reference[..., top:top + request.height, left:left + request.width]
             video = self.color_corrector(video, reference)
             if progress is not None:
                 progress("Color correction complete")
@@ -213,6 +230,14 @@ class FlashVSRInferencePipeline:
             "expanded_model_frames": timeline.expanded_frames,
             "source_fps": fps,
             "output_frames": (video.shape[2] if video is not None else int(artifact.get("frames", timeline.effective_frames) if artifact else timeline.effective_frames)),
+            "requested_output_size": (
+                {"height": request.height, "width": request.width}
+                if request.height is not None else None
+            ),
+            "model_canvas_size": (
+                {"height": model_size[0], "width": model_size[1]}
+                if model_size is not None else None
+            ),
             "temporal_compression": self.config.temporal_compression,
             "temporal_repeat_factor": timeline.repeat_factor,
             "temporal_merge": self.config.temporal_merge,

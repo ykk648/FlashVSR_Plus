@@ -57,19 +57,41 @@ We release the inference code, pretrained models, and training dataset to facili
 - Linux
 - NVIDIA GPU with CUDA
 - Conda/Miniconda or Python `venv`
-- Python 3.10
-- Input height and width must both be divisible by 128
+- Python 3.11
+- H.264 output height and width must be even. The pipeline edge-pads the model canvas to multiples of 128 and removes that padding before encoding.
 
 The released inference pipeline is CUDA-only and does not support CPU inference.
 
 ## Installation
+
+### uv / 国内镜像 / FastAPI 部署
+
+本仓库附带面向中国网络环境的 `uv` 部署脚本、hf-mirror 模型下载器、单 GPU
+FastAPI 队列和 tmux 启动脚本。国内镜像默认直连；仅在访问受限外网时，通过
+本地环境变量显式启用代理：
+
+```bash
+source scripts/configure_china_mirrors.sh
+scripts/bootstrap_uv.sh
+uv run python scripts/download_flashvsr_plus.py --mode turbo
+cp -n .env.example .env
+scripts/start_api_tmux.sh
+```
+
+如需代理，仅在本地 `.env` 中设置 `FLASHVSR_PROXY_URL`，并对需要代理的单条
+命令添加 `FLASHVSR_USE_PROXY=1`。部署完成后，通过
+`http://SERVER_IP:18303/` 打开网页工作台：上传视频、检查分辨率和帧数、选择
+目标清晰度、查看处理进度，并下载完成的 MP4。
+
+详见 [DEPLOYMENT_CN.md](DEPLOYMENT_CN.md) 和
+[API_SERVICE.md](API_SERVICE.md)。
 
 ### 1. Create the environment
 
 #### Option A: Conda (recommended)
 
 ```bash
-conda create -n flashvsr_plus python=3.10 -y
+conda create -n flashvsr_plus python=3.11 -y
 conda activate flashvsr_plus
 
 pip install -r requirements.txt
@@ -87,7 +109,7 @@ The project also works in a standard Python 3.10 virtual environment. It uses
 the host NVIDIA driver/CUDA runtime.
 
 ```bash
-python3.10 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 
 python -m pip install --upgrade pip setuptools wheel
@@ -249,9 +271,16 @@ python -m inference.run_stream \
 
 `--decode-every` takes a positive multiple of 4. Smaller values reduce the number of frames held for each decoding segment. Without this option, the default `auto` mode loads the full input video before inference.
 
-Both `height` and `width` must be divisible by 128.
+Both `height` and `width` must be even for H.264 output. They no longer need to
+be divisible by 128: the pipeline preserves the requested content size, adds
+centered edge padding to a 128-aligned model canvas, then removes only that
+padding before encoding.
 
-The CLI center-crops and resizes the input, then writes an H.264 MP4. It keeps the input FPS and audio stream when present. Incomplete temporal groups are padded internally and cropped back to the original frame count.
+The CLI center-crops only when the requested output aspect ratio differs from
+the source, then resizes and writes an H.264 MP4. Model-alignment padding does
+not crop source content. It keeps the input FPS and audio stream when present.
+Incomplete temporal groups are padded internally and cropped back to the
+original frame count.
 
 ### Temporal compression
 
@@ -264,8 +293,8 @@ The CLI center-crops and resizes the input, then writes an H.264 MP4. It keeps t
 | `--mode {turbo,base,v1}` | `turbo` | Select the model preset. |
 | `--input PATH` | required | Input video path. |
 | `--output PATH` | required | Output MP4 path. |
-| `--height N` | required | Output height. Must be divisible by 128. |
-| `--width N` | required | Output width. Must be divisible by 128. |
+| `--height N` | required | Final output height. Must be even; model alignment is automatic. |
+| `--width N` | required | Final output width. Must be even; model alignment is automatic. |
 | `--max-frames N` | all | Maximum number of decoded input frames. |
 | `--cache-offload-mode {auto,never,always}` | `auto` | KV-cache residency policy. |
 | `--decode-every N` | `auto` | Read and decode in segments. N must be a positive multiple of 4; `auto` loads the full input. |

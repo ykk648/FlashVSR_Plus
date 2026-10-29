@@ -54,7 +54,7 @@ def tensor_to_uint8_frames(
 class IncrementalVideoWriter:
     """Append bounded CPU tensors to a single encoder session."""
 
-    def __init__(self, path, fps, *, preset="veryfast"):
+    def __init__(self, path, fps, *, preset="veryfast", output_size=None):
         self.destination = Path(path)
         self.destination.parent.mkdir(parents=True, exist_ok=True)
         self.fps = float(fps)
@@ -65,11 +65,20 @@ class IncrementalVideoWriter:
         )
         self.frame_count = 0
         self.first_frame = None
+        self.output_size = output_size
 
     def append(self, video, *, value_range="neg_one_to_one"):
         # Explicitly accept [B,C,F,H,W], avoiding ambiguous short F dimensions.
         if video.ndim != 5 or video.shape[0] != 1:
             raise ValueError("Expected one video [1,C,F,H,W]")
+        if self.output_size is not None:
+            output_height, output_width = self.output_size
+            height, width = video.shape[-2:]
+            if output_height > height or output_width > width:
+                raise ValueError("output crop is larger than the decoded model canvas")
+            top = (height - output_height) // 2
+            left = (width - output_width) // 2
+            video = video[..., top:top + output_height, left:left + output_width]
         for tensor_frame in video[0].permute(1, 0, 2, 3):
             frame = tensor_to_uint8_frame(tensor_frame, value_range=value_range)
             if self.first_frame is None:

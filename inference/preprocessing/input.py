@@ -8,16 +8,53 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
+from inference.config import INPUT_MULTIPLE
 from inference.request import InferenceRequest
 
 
+def aligned_spatial_size(height: int, width: int) -> tuple[int, int]:
+    """Return the model canvas size without changing the requested content size."""
+    return (
+        ((int(height) + INPUT_MULTIPLE - 1) // INPUT_MULTIPLE) * INPUT_MULTIPLE,
+        ((int(width) + INPUT_MULTIPLE - 1) // INPUT_MULTIPLE) * INPUT_MULTIPLE,
+    )
+
+
+def spatial_padding(height: int, width: int) -> tuple[int, int, int, int]:
+    """Return left, right, top, bottom padding for a centered model canvas."""
+    aligned_height, aligned_width = aligned_spatial_size(height, width)
+    horizontal = aligned_width - width
+    vertical = aligned_height - height
+    left = horizontal // 2
+    top = vertical // 2
+    return left, horizontal - left, top, vertical - top
+
+
+def _pad_tensor_to_alignment(value: torch.Tensor, height: int, width: int) -> torch.Tensor:
+    left, right, top, bottom = spatial_padding(height, width)
+    if not any((left, right, top, bottom)):
+        return value
+    return F.pad(value, (left, right, top, bottom), mode="replicate")
+
+
+def _pad_frames_to_alignment(value: np.ndarray, height: int, width: int) -> np.ndarray:
+    left, right, top, bottom = spatial_padding(height, width)
+    if not any((left, right, top, bottom)):
+        return value
+    return np.pad(
+        value,
+        ((0, 0), (top, bottom), (left, right), (0, 0)),
+        mode="edge",
+    )
+
+
 def _resize_tensor_video(value: torch.Tensor, height: int, width: int) -> torch.Tensor:
-    """Center-crop and resize a [B,C,F,H,W] tensor in its existing range."""
+    """Center-crop/resize content, then edge-pad its model canvas."""
     if height <= 0 or width <= 0:
         raise ValueError("target height and width must be positive")
     source_height, source_width = value.shape[-2:]
     if (source_height, source_width) == (height, width):
-        return value
+        return _pad_tensor_to_alignment(value, height, width)
     source_aspect = source_height / source_width
     target_aspect = height / width
     if source_aspect < target_aspect:
@@ -31,7 +68,8 @@ def _resize_tensor_video(value: torch.Tensor, height: int, width: int) -> torch.
     batch, channels, frames = value.shape[:3]
     flat = value.permute(0, 2, 1, 3, 4).reshape(batch * frames, channels, *value.shape[-2:])
     flat = F.interpolate(flat, size=(height, width), mode="bilinear", align_corners=False)
-    return flat.reshape(batch, frames, channels, height, width).permute(0, 2, 1, 3, 4)
+    value = flat.reshape(batch, frames, channels, height, width).permute(0, 2, 1, 3, 4)
+    return _pad_tensor_to_alignment(value, height, width)
 
 
 def pil_center_crop_resize(
@@ -117,6 +155,7 @@ def load_lq_video(
             request.width,
             resample=(Image.Resampling.BICUBIC if stream else Image.Resampling.BILINEAR),
         )
+        array = _pad_frames_to_alignment(array, request.height, request.width)
     tensor = torch.from_numpy(np.ascontiguousarray(array)).permute(0, 3, 1, 2).float()
     tensor = tensor.div(127.5).sub(1.0).permute(1, 0, 2, 3).unsqueeze(0)
     return tensor, fps
@@ -206,4 +245,5 @@ def _frames_to_tensor(frames, request, *, stream):
             array, request.height, request.width,
             resample=Image.Resampling.BICUBIC if stream else Image.Resampling.BILINEAR,
         )
+        array = _pad_frames_to_alignment(array, request.height, request.width)
     return torch.from_numpy(np.ascontiguousarray(array)).permute(0, 3, 1, 2).float().div_(127.5).sub_(1.0).permute(1, 0, 2, 3).unsqueeze(0)

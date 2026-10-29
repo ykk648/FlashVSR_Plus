@@ -8,15 +8,47 @@ version = "0.1.0"
 description = "Inference pipeline for FlashVSR+ video super-resolution"
 readme = "README.md"
 license = {file = "LICENSE"}
-requires-python = ">=3.10"
-
-# Runtime dependencies are intentionally installed from requirements.txt. In
-# particular, this package does not replace a user's existing PyTorch/CUDA
-# installation when installed by a host application such as ComfyUI.
-dependencies = []
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "accelerate>=1.8,<2",
+    "einops>=0.8,<1",
+    "imageio>=2.37,<3",
+    "imageio-ffmpeg>=0.6,<1",
+    "numpy>=2,<3",
+    "opencv-python-headless>=4.10,<5",
+    "pillow>=10,<12",
+    "safetensors>=0.5,<1",
+    "tqdm>=4.66,<5",
+    "torch==2.6.0",
+]
 
 [tool.setuptools.packages.find]
-include = ["inference*", "model_io*", "models*", "flashvsr_plus*"]
+include = ["inference*", "model_io*", "models*", "flashvsr_plus*", "flashvsr_plus_api*"]
 
 [tool.setuptools.package-data]
 flashvsr_plus = ["py.typed"]
+flashvsr_plus_api = ["static/*"]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+]
+
+[project.scripts]
+flashvsr-plus-api = "flashvsr_plus_api.cli:main"
+
+[tool.uv]
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default-groups = ["dev"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[dependency-groups]
+dev = ["pytest>=8,<9", "setuptools>=68"]

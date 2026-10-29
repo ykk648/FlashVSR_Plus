@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="FlashVSR+ 视频超分辨率服务">
+  <title>FlashVSR+ 视频超分</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="FlashVSR+ 首页">
+      <span class="brand-mark" aria-hidden="true">F+</span>
+      <span><strong>FlashVSR+</strong><small>视频超分工作台</small></span>
+    </a>
+    <div id="serviceStatus" class="service-status" aria-live="polite">
+      <span class="status-dot"></span><span>正在检查服务</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="intro">
+      <p class="eyebrow">RTX 4090 · TURBO / BASE</p>
+      <h1>让低清视频更清晰，<br>每一步都看得见。</h1>
+      <p>上传视频后，直接选择 720p、1080p 或 2048p；宽度会按原视频比例自动计算。</p>
+    </section>
+
+    <div class="work-grid">
+      <section class="panel input-panel" aria-labelledby="inputTitle">
+        <div class="panel-heading">
+          <span class="step">01</span>
+          <div><h2 id="inputTitle">选择视频</h2><p>支持 MP4、MOV、MKV、AVI、WebM、M4V</p></div>
+        </div>
+
+        <label id="dropzone" class="dropzone" for="fileInput" tabindex="0">
+          <input id="fileInput" type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/x-msvideo,video/webm,.m4v" hidden>
+          <span class="upload-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+          </span>
+          <strong>拖放视频到这里</strong>
+          <span>或点击从本机选择</span>
+        </label>
+
+        <div id="uploadProgress" class="upload-progress hidden" aria-live="polite">
+          <div class="progress-line"><span id="uploadLabel">正在上传</span><span id="uploadPercent">0%</span></div>
+          <div class="bar"><i id="uploadBar"></i></div>
+        </div>
+
+        <div id="fileCard" class="file-card hidden">
+          <video id="videoPreview" muted playsinline></video>
+          <div class="file-copy">
+            <strong id="fileName"></strong>
+            <span id="fileSize"></span>
+          </div>
+          <button id="replaceFile" class="icon-button" type="button" title="更换视频" aria-label="更换视频">×</button>
+        </div>
+
+        <div id="validation" class="validation hidden" role="status"></div>
+
+        <div id="sourceMeta" class="meta-grid hidden">
+          <div><span>输入尺寸</span><strong id="sourceResolution">—</strong></div>
+          <div><span>视频帧数</span><strong id="sourceFrames">—</strong></div>
+          <div><span>帧率</span><strong id="sourceFps">—</strong></div>
+          <div><span>时长</span><strong id="sourceDuration">—</strong></div>
+        </div>
+      </section>
+
+      <section class="panel settings-panel" aria-labelledby="settingsTitle">
+        <div class="panel-heading">
+          <span class="step">02</span>
+          <div><h2 id="settingsTitle">设置输出</h2><p>最终尺寸保持比例，模型内部自动补边对齐</p></div>
+        </div>
+
+        <div id="settingsEmpty" class="empty-state">
+          <span>等待视频</span>
+          <p>上传完成后，可用的超分倍率会显示在这里。</p>
+        </div>
+
+        <form id="jobForm" class="job-form hidden">
+          <fieldset class="mode-fieldset">
+            <legend>模型模式</legend>
+            <div class="mode-options">
+              <label class="scale-option">
+                <input type="radio" name="mode" value="turbo" checked>
+                <span><b>Turbo</b><small>速度优先，日常推荐</small></span>
+              </label>
+              <label id="baseModeOption" class="scale-option disabled">
+                <input type="radio" name="mode" value="base" disabled>
+                <span><b>Base</b><small>质量优先，耗时更长</small></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>目标清晰度</legend>
+            <div id="scaleOptions" class="scale-options"></div>
+          </fieldset>
+
+          <details class="advanced">
+            <summary>自定义输出尺寸</summary>
+            <div class="dimension-row">
+              <label>宽度<input id="customWidth" type="number" min="128" step="2" inputmode="numeric"></label>
+              <span>×</span>
+              <label>高度<input id="customHeight" type="number" min="128" step="2" inputmode="numeric"></label>
+            </div>
+            <button id="useCustom" class="text-button" type="button">使用此尺寸</button>
+            <p id="customHint"></p>
+          </details>
+
+          <label id="frameLimitRow" class="check-row hidden">
+            <input id="frameLimit" type="checkbox">
+            <span><strong id="frameLimitTitle">仅处理开头 300 帧（可选）</strong><small id="frameLimitHint">不勾选将处理完整视频。</small></span>
+          </label>
+
+          <div class="output-summary">
+            <span>预计输出</span>
+            <strong id="outputResolution">—</strong>
+            <small id="outputProfile">请选择倍率</small>
+          </div>
+
+          <button id="startButton" class="primary-button" type="submit">
+            <span>开始超分</span><span aria-hidden="true">→</span>
+          </button>
+          <p class="queue-note">任务按提交顺序使用单张 GPU 处理；切换模型时会重新加载权重。</p>
+        </form>
+      </section>
+    </div>
+
+    <section id="taskPanel" class="panel task-panel hidden" aria-labelledby="taskTitle">
+      <div class="panel-heading task-heading">
+        <span class="step">03</span>
+        <div><h2 id="taskTitle">处理进度</h2><p id="taskSubtitle">任务已进入队列</p></div>
+        <span id="taskState" class="task-state">排队中</span>
+      </div>
+      <div class="task-progress">
+        <div class="bar large"><i id="taskBar"></i></div>
+        <div class="progress-line"><span id="stageText">等待 GPU</span><span id="taskPercent">0%</span></div>
+      </div>
+      <div id="resultMetrics" class="result-metrics hidden"></div>
+      <div class="task-actions">
+        <button id="cancelButton" class="secondary-button" type="button">取消任务</button>
+        <a id="downloadButton" class="primary-button hidden" href="#" download>下载超分视频 <span aria-hidden="true">↓</span></a>
+        <button id="newTaskButton" class="secondary-button hidden" type="button">处理另一个视频</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>FlashVSR+ Turbo / Base</span>
+    <span>FastAPI 视频超分服务</span>
+  </footer>
+  <script src="/static/app.js?v=20261015-model-submit-2" defer></script>
+</body>
+</html>

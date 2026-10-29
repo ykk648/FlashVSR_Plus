@@ -32,8 +32,8 @@ if [[ ! "$height" =~ ^[1-9][0-9]*$ || ! "$width" =~ ^[1-9][0-9]*$ ]]; then
   echo "HEIGHT and WIDTH must be positive integers." >&2
   exit 2
 fi
-if (( height % 128 != 0 || width % 128 != 0 )); then
-  echo "HEIGHT and WIDTH must be divisible by 128; got ${height}x${width}." >&2
+if (( height % 2 != 0 || width % 2 != 0 )); then
+  echo "HEIGHT and WIDTH must be even for H.264 output; got ${height}x${width}." >&2
   exit 2
 fi
 if [[ -n "$max_frames" && ! "$max_frames" =~ ^[1-9][0-9]*$ ]]; then

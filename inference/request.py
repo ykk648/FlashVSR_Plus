@@ -31,6 +31,8 @@ class InferenceRequest:
             raise ValueError("fps must be positive")
         if (self.height is None) != (self.width is None):
             raise ValueError("height and width must be provided together")
+        if self.height is not None and (self.height % 2 or self.width % 2):
+            raise ValueError("height and width must be even for H.264 yuv420p output")
 
 
 @dataclass
